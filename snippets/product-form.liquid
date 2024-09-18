@@ -256,5 +256,15 @@
     {% endif %}
 
     {% render 'product-bis-trigger', bis_enabled: bis_enabled %}
+
+    <div
+      id="brauz-find-in-store-config-product-page"
+      data-sd="{{ shop.permanent_domain }}"
+      data-cvi="{{ product.first_available_variant.id }}"
+      data-hodv="{{ product.has_only_default_variant }}"
+      style="display: none; width: 0"
+    ></div>
+    <div id="brauz-find-in-store-product-page"></div>
+    <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.js" async></script>
   {% endunless %}
 {% endform %}
