@@ -1,0 +1,260 @@
+{%- liquid
+  assign short_description = section.settings.short_description
+  assign print_collection_name = nil
+
+  for tag in product.tags
+    if tag contains 'print_'
+      assign print_collection_name = tag | split: 'print_' | last
+      break
+    endif
+  endfor
+
+  if print_collection_name != blank
+    assign print_collection_handle = print_collection_name | handle
+    assign print_collection_name = print_collection_name | replace: '-', ' '
+    assign print_collection = collections[print_collection_handle]
+  endif
+
+  if product.price == 0
+    assign disable_purchase = true
+  endif
+
+  assign disableAddToCart = false
+  assign addToCartText = 'products.product.add_to_cart' | t
+  assign addToCartTextAttribute = 'products.product.add_to_cart' | t
+  assign addToCartSelectText = 'products.product.add_to_cart_disabled' | t
+
+  if current_variant.available == false
+    assign disableAddToCart = true
+    assign addToCartText = 'products.product.sold_out' | t
+    assign addToCartSelectText = 'products.product.sold_out' | t
+
+    if bis_enabled
+      assign addToCartSelectText = 'products.product.back_in_stock.button' | t
+    endif
+  endif
+
+  assign hideAddToCart = false
+  if product.variants.size > 1 and product.selected_variant == blank
+    assign hideAddToCart = true
+  endif
+
+  # ------------------------------------------------------------------------
+  # BACK IN STOCK
+  # ------------------------------------------------------------------------
+  if section.settings.enable_back_in_stock
+    if product.selected_variant.available == false
+      assign hideAddToCart = true
+    endif
+
+    assign variants_available = false
+    for variant in product.variants
+      if variant.available == true
+        assign variants_available = true
+      endif
+    endfor
+  endif
+
+  # ------------------------------------------------------------------------
+  # PREORDER
+  # ------------------------------------------------------------------------
+  # - Applies to products with a 'preorder' tag.
+  # - Products must be available for purchase to display the preorder label
+  # - Out of stock products with a preorder tag will display the 'sold out'
+  #   or 'back in stock' label.
+
+  assign is_preorder = product.tags | where: 'preorder' | first
+  if is_preorder
+    assign addToCartText = 'products.product.preorder.button' | t
+    assign addToCartSelectText = 'products.product.preorder.button' | t
+    assign addToCartTextAttribute = 'products.product.preorder.button' | t
+  endif
+
+  assign iso_code = cart.currency.iso_code
+  capture currency_code
+    unless iso_code == 'AUD'
+      echo ' '
+      echo iso_code
+    endunless
+  endcapture
+
+  # Digital & Physical Gift Cards
+  assign digital_gift_card = settings.digital_gift_card
+  assign physical_gift_card = settings.physical_gift_card
+  assign is_digital_gift_card = false
+  assign is_physical_gift_card = false
+
+  if digital_gift_card != blank and physical_gift_card != blank
+    if product == digital_gift_card
+      assign is_digital_gift_card = true
+    endif
+    if product == physical_gift_card
+      assign is_physical_gift_card = true
+    endif
+  endif
+-%}
+
+{% form 'product', product, data-product-form: '', data-product-handle: product.handle %}
+  <h1 class="h2 product__title">{{ product.title }}</h1>
+
+  {% unless disable_purchase %}
+    <div class="product__price-container {{ pricing_class }}" data-price-wrapper>
+      <span class="h4 product__compare-at-price{% if product.selected_or_first_available_variant.compare_at_price == blank %} hide{% endif %}" data-product-compare-at-price>
+        {%- if product.selected_or_first_available_variant.compare_at_price -%}
+          {{ product.selected_or_first_available_variant.compare_at_price | money_without_trailing_zeros }}{{ currency_code }}
+        {%- endif -%}
+      </span>
+      <span class="h4 product__price" data-product-price>{{ product.selected_or_first_available_variant.price | money_without_trailing_zeros }}{{ currency_code }}</span>
+    </div>
+
+    {% render 'product-payment-options-text' %}
+  {% endunless %}
+
+  {% if short_description != blank %}
+    <p class="product__description">{{ short_description }}</p>
+  {% endif %}
+
+  {% if print_collection != blank %}
+    {% assign print_collection_link_text = 'products.product.shop_all_print' | t | replace: '{{ print }}', print_collection_name %}
+    <p class="product__shop-print">
+      <a class="btn btn--text" href="{{ print_collection.url }}">{{ print_collection_link_text }}</a>
+    </p>
+  {% endif %}
+
+  {% if product.tags contains "gwp-exclusion" %}
+    <input type="hidden" name="properties[_GWPExclusion]" value="exclude" />
+  {% endif %}
+
+  {% if is_digital_gift_card or is_physical_gift_card %}
+    <div class="product__giftcard-select">
+      <p>{{ 'products.product.gift_card.selection_messaging' | t }}</p>
+     <div class="product__giftcard-options-container">
+      {% if is_digital_gift_card %}
+        <span class="product__giftcard-option">
+          <span class="product__giftcard-radio product__giftcard-radio--checked"></span>
+          {{ 'products.product.gift_card.digital' | t }}
+        </span>
+      {% else  %}
+        <a class="product__giftcard-option product__giftcard-link" href="{{ digital_gift_card.url }}" title="{{ digital_gift_card.title }}">
+          <span class="product__giftcard-radio"></span>
+          {{ 'products.product.gift_card.digital' | t }}
+        </a>
+      {% endif %}
+
+      {% if is_physical_gift_card %}
+        <span class="product__giftcard-option">
+          <span class="product__giftcard-radio product__giftcard-radio--checked"></span>
+          {{ 'products.product.gift_card.physical' | t }}
+        </span>
+      {% else %}
+        <a class="product__giftcard-option product__giftcard-link" href="{{ physical_gift_card.url }}" title="{{ physical_gift_card.title }}">
+          <span class="product__giftcard-radio"></span>
+          {{ 'products.product.gift_card.physical' | t }}
+        </a>
+      {% endif %}
+    </div>
+    </div>
+  {% endif %}
+
+  {% unless disable_purchase %}
+    {%- liquid
+      render 'product-swatches'
+
+      unless product.has_only_default_variant or product.variants.size == 1
+        render 'product-options', bis_enabled: bis_enabled
+      endunless
+    -%}
+
+    {% liquid
+      assign fit_no = product.metafields.size_guide.fit | default: collection.metafields.size_guide.fit | plus: 0
+      assign fit_style = 'normal'
+      assign size_guide_label = 'products.product.size_guide.trigger' | t
+
+      if fit_no != blank
+        if fit_no > 50
+          assign fit_style = 'large'
+          assign large_content = 'products.product.size_guide.fit_three' | t
+          assign size_guide_label = large_content | append: '. ' | append: size_guide_label
+        elsif fit_no < 50
+          assign fit_style = 'small'
+          assign small_content = 'products.product.size_guide.fit_one' | t
+          assign size_guide_label = small_content | append: '. ' | append: size_guide_label
+        endif
+      endif
+    %}
+
+    <button class="product__size-guide-trigger btn-none text--small{% if fit_style == 'large' or fit_style == 'small' %} show-warning{% endif %}" type="button" data-modal-size-guide-trigger>
+      {%- liquid
+        if fit_style == 'large' or fit_style == 'small'
+          render 'icon-info'
+        else
+          render 'icon-ruler'
+        endif
+          echo size_guide_label
+      -%}
+    </button>
+
+    {% comment %}
+      In order for this form to submit, it needs to contain an input with name="id".
+      ProductForm() will automatically create this input (or make sure it has the
+      right value set if it already exists) on form submit based on the
+      currently selected variant. However, if JS is disabled we need a fallback.
+
+      Include a single <select> element which allows users to select all variants
+      as a fallback and present it only when JS is disabled. In addition,
+      make sure to hide the option inputs declared above, which is done with the
+      .js class which only shows its contents when JS is enabled.
+    {% endcomment %}
+    <noscript class="no-js">
+      <select name="id" data-product-select>
+      {% for variant in product.variants %}
+        {% capture variant_selected %}{% if variant == current_variant %}selected=""{% endif %}{% endcapture %}
+        {% capture variant_available %}{% unless variant.available %}disabled=""{% endunless %}{% endcapture %}
+        <option value="{{ variant.id }}" {{ variant_selected }} {{ variant_available }}>{{ variant.title }}</option>
+      {% endfor %}
+      </select>
+    </noscript>
+
+    {% comment %}
+      Any input with `name="quantity"` will be picked up by ProductForm and
+      registered as a quantity input. If a quantity input is not included, a
+      default quantity of 1 is assumed.
+    {% endcomment %}
+    <input type="hidden" id="Quantity" name="quantity" value="1" min="1">
+
+    {% comment %}
+      Line Item property inputs with `name="properties[NAME]"` will be picked up
+      by ProductForm and registered as a properties input.
+    {% endcomment %}
+    {% comment %} <label for="Details">{{ 'products.product.details' | t }}</label>
+    <textarea id="Details" name="properties[Details]"></textarea> {% endcomment %}
+
+    {% render 'product-callout' %}
+
+    {% if gift_card_recipient_feature_active %}
+      {% render 'gift-card-form', product: product, section: section %}
+    {% endif %}
+
+    <button
+      class="product__add-to-cart product__form-button btn btn--block btn--add-to-cart{% if hideAddToCart %} hide{% endif %}"
+      type="submit"
+      name="add"
+      data-label="{{ addToCartTextAttribute }}"
+      data-add-to-cart
+      {% if disableAddToCart %}disabled{% endif %}>
+        {{ addToCartText }}
+    </button>
+
+    {% if product.variants.size > 1 and product.selected_variant == blank %}
+      <button
+        class="product__form-button btn btn--block btn--add-to-cart{% if variants_available == false %} btn--secondary{% endif %}"
+        type="button"
+        {% if bis_enabled == false and variants_available == false %}disabled{% endif %}
+        data-select-trigger>
+        {{ addToCartSelectText }}
+      </button>
+    {% endif %}
+
+    {% render 'product-bis-trigger', bis_enabled: bis_enabled %}
+  {% endunless %}
+{% endform %}
