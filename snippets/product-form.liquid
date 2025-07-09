@@ -330,9 +330,13 @@
         style="display: none; width: 0"
       ></div>
       <div id="brauz-find-in-store-product-page"></div>
-      <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.js" async></script>
+      <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.update.js" async></script>
     {%- endif -%}
     <div id="try-with-mirra-custom-product-container"></div>
     </div>
+
+    {%- if settings.enable_brauz and product.gift_card? == false -%}
+      <div id="brauz-find-in-store-product-page-2"></div>
+    {%- endif -%}
   {% endunless %}
 {% endform %}
