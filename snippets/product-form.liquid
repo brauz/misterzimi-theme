@@ -63,11 +63,41 @@
   # - Out of stock products with a preorder tag will display the 'sold out'
   #   or 'back in stock' label.
 
-  assign is_preorder = product.tags | where: 'preorder' | first
-  if is_preorder
+  assign show_pre_order = false
+  assign current_variant = product.selected_variant
+
+  # Product level
+  assign selling_status = product.metafields.details.callout_heading
+  assign callout_text_cart = product.metafields.selling_status.callout_text_cart
+
+  if selling_status != blank and callout_text_cart != blank
+    assign show_pre_order = true
     assign addToCartText = 'products.product.preorder.button' | t
-    assign addToCartSelectText = 'products.product.preorder.button' | t
     assign addToCartTextAttribute = 'products.product.preorder.button' | t
+  endif
+
+  # Variant level
+  assign callout_text = current_variant.metafields.selling_status.callout_text
+
+  if current_variant.metafields.selling_status.tag != blank
+    assign selling_status = current_variant.metafields.selling_status.tag
+  endif
+
+  if current_variant.metafields.selling_status.callout_text_cart != blank or callout_text != blank
+    assign callout_text_cart = current_variant.metafields.selling_status.callout_text_cart | default: callout_text
+  endif
+
+  assign preorder_text = product.metafields.label.text | default: 'PRE ORDER'
+  assign cta_text = current_variant.metafields.selling_status.cta_text
+
+  if current_variant.available and current_variant.metafields.selling_status.tag != blank
+    assign show_pre_order = true
+
+    if cta_text != blank
+      assign addToCartText = cta_text
+    else
+      assign addToCartText = preorder_text | upcase
+    endif
   endif
 
   assign iso_code = cart.currency.iso_code
@@ -107,19 +137,25 @@
       <span class="h4 product__price" data-product-price>{{ product.selected_or_first_available_variant.price | money_without_trailing_zeros }}{{ currency_code }}</span>
     </div>
 
-    {% render 'product-payment-options-text' %}
+    {%- render 'discounted-price', product: product, class: 'product__discount-price text--large' -%}
+
+    {% unless product.template_suffix contains settings.outlet_template_suffix %}
+      {% render 'product-payment-options-text' %}
+    {% endunless %}
   {% endunless %}
 
   {% if short_description != blank %}
     <p class="product__description">{{ short_description }}</p>
   {% endif %}
 
-  {% if print_collection != blank %}
-    {% assign print_collection_link_text = 'products.product.shop_all_print' | t | replace: '{{ print }}', print_collection_name %}
-    <p class="product__shop-print">
-      <a class="btn btn--text" href="{{ print_collection.url }}">{{ print_collection_link_text }}</a>
-    </p>
-  {% endif %}
+  {% unless product.template_suffix contains settings.outlet_template_suffix %}
+    {% if print_collection != blank %}
+      {% assign print_collection_link_text = 'products.product.shop_all_print' | t | replace: '{{ print }}', print_collection_name %}
+      <p class="product__shop-print">
+        <a class="btn btn--text" href="{{ print_collection.url }}">{{ print_collection_link_text }}</a>
+      </p>
+    {% endif %}
+  {% endunless %}
 
   {% if product.tags contains "gwp-exclusion" %}
     <input type="hidden" name="properties[_GWPExclusion]" value="exclude" />
@@ -205,15 +241,17 @@
       make sure to hide the option inputs declared above, which is done with the
       .js class which only shows its contents when JS is enabled.
     {% endcomment %}
-    <noscript class="no-js">
-      <select name="id" data-product-select>
-      {% for variant in product.variants %}
-        {% capture variant_selected %}{% if variant == current_variant %}selected=""{% endif %}{% endcapture %}
-        {% capture variant_available %}{% unless variant.available %}disabled=""{% endunless %}{% endcapture %}
-        <option value="{{ variant.id }}" {{ variant_selected }} {{ variant_available }}>{{ variant.title }}</option>
-      {% endfor %}
-      </select>
-    </noscript>
+     <div class="no-js">
+      <noscript>
+        <select name="id" data-product-select>
+        {% for variant in product.variants %}
+          {% capture variant_selected %}{% if variant == current_variant %}selected=""{% endif %}{% endcapture %}
+          {% capture variant_available %}{% unless variant.available %}disabled=""{% endunless %}{% endcapture %}
+          <option value="{{ variant.id }}" {{ variant_selected }} {{ variant_available }}>{{ variant.title }}</option>
+        {% endfor %}
+        </select>
+      </noscript>
+    </div>
 
     {% comment %}
       Any input with `name="quantity"` will be picked up by ProductForm and
@@ -229,17 +267,42 @@
     {% comment %} <label for="Details">{{ 'products.product.details' | t }}</label>
     <textarea id="Details" name="properties[Details]"></textarea> {% endcomment %}
 
-    {% render 'product-callout' %}
+    {% render 'product-callout', selling_status: selling_status, callout_text: callout_text %}
 
     {% if gift_card_recipient_feature_active %}
       {% render 'gift-card-form', product: product, section: section %}
     {% endif %}
+
+    {% # * Storing selling status and callout in 2 seperate line item properties
+       # - _selling-status is used as the label for the cart item note applied in cart
+       # - Note stores the callout which is customer facing in checkout.
+    %}
+    <input
+      type="checkbox"
+      name="properties[_selling-status]"
+      id="selling-status"
+      {% if show_pre_order %}checked{% endif %}
+      class="hide"
+      data-selling-status-checkbox
+      value="{{ selling_status }}"
+    />
+
+    <input
+      type="checkbox"
+      name="properties[Note]"
+      id="pre-order"
+      {% if show_pre_order %}checked{% endif %}
+      class="hide"
+      data-pre-order-checkbox
+      value="{{ callout_text_cart }}"
+    />
 
     <button
       class="product__add-to-cart product__form-button btn btn--block btn--add-to-cart{% if hideAddToCart %} hide{% endif %}"
       type="submit"
       name="add"
       data-label="{{ addToCartTextAttribute }}"
+      data-selling-status="{{ selling_status }}"
       data-add-to-cart
       {% if disableAddToCart %}disabled{% endif %}>
         {{ addToCartText }}
@@ -257,14 +320,19 @@
 
     {% render 'product-bis-trigger', bis_enabled: bis_enabled %}
 
-    <div
-      id="brauz-find-in-store-config-product-page"
-      data-sd="{{ shop.permanent_domain }}"
-      data-cvi="{{ product.first_available_variant.id }}"
-      data-hodv="{{ product.has_only_default_variant }}"
-      style="display: none; width: 0"
-    ></div>
-    <div id="brauz-find-in-store-product-page"></div>
-    <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.js" async></script>
+    <div class="mirra-brauz-wrapper">
+      {%- if settings.enable_brauz and product.gift_card? == false -%}
+      <div
+        id="brauz-find-in-store-config-product-page"
+        data-sd="{{ shop.permanent_domain }}"
+        data-cvi="{{ product.first_available_variant.id }}"
+        data-hodv="{{ product.has_only_default_variant }}"
+        style="display: none; width: 0"
+      ></div>
+      <div id="brauz-find-in-store-product-page"></div>
+      <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.js" async></script>
+    {%- endif -%}
+    <div id="try-with-mirra-custom-product-container"></div>
+    </div>
   {% endunless %}
 {% endform %}
