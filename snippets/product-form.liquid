@@ -19,21 +19,6 @@
     assign disable_purchase = true
   endif
 
-  assign disableAddToCart = false
-  assign addToCartText = 'products.product.add_to_cart' | t
-  assign addToCartTextAttribute = 'products.product.add_to_cart' | t
-  assign addToCartSelectText = 'products.product.add_to_cart_disabled' | t
-
-  if current_variant.available == false
-    assign disableAddToCart = true
-    assign addToCartText = 'products.product.sold_out' | t
-    assign addToCartSelectText = 'products.product.sold_out' | t
-
-    if bis_enabled
-      assign addToCartSelectText = 'products.product.back_in_stock.button' | t
-    endif
-  endif
-
   assign hideAddToCart = false
   if product.variants.size > 1 and product.selected_variant == blank
     assign hideAddToCart = true
@@ -63,42 +48,76 @@
   # - Out of stock products with a preorder tag will display the 'sold out'
   #   or 'back in stock' label.
 
-  assign show_pre_order = false
+  assign enable_selling_status = false
   assign current_variant = product.selected_variant
 
-  # Product level
-  assign selling_status = product.metafields.details.callout_heading
-  assign callout_text_cart = product.metafields.selling_status.callout_text_cart
-
-  if selling_status != blank and callout_text_cart != blank
-    assign show_pre_order = true
-    assign addToCartText = 'products.product.preorder.button' | t
-    assign addToCartTextAttribute = 'products.product.preorder.button' | t
+  # Product level (market aware)
+  assign iso = localization.country.iso_code
+  assign iso_currency = cart.currency.iso_code
+  assign is_us_market = false
+  if iso == 'US' or iso_currency == 'USD'
+    assign is_us_market = true
   endif
 
-  # Variant level
-  assign callout_text = current_variant.metafields.selling_status.callout_text
+  assign disableAddToCart = false
+  assign addToCartText = 'products.product.add_to_cart' | t
+  assign addToCartTextAttribute = 'products.product.add_to_cart' | t
+  assign addToCartSelectText = 'products.product.add_to_cart_disabled' | t
 
-  if current_variant.metafields.selling_status.tag != blank
-    assign selling_status = current_variant.metafields.selling_status.tag
-  endif
+  if current_variant.available == false
+    assign disableAddToCart = true
+    assign addToCartText = 'products.product.sold_out' | t
+    assign addToCartSelectText = 'products.product.sold_out' | t
 
-  if current_variant.metafields.selling_status.callout_text_cart != blank or callout_text != blank
-    assign callout_text_cart = current_variant.metafields.selling_status.callout_text_cart | default: callout_text
-  endif
-
-  assign preorder_text = product.metafields.label.text | default: 'PRE ORDER'
-  assign cta_text = current_variant.metafields.selling_status.cta_text
-
-  if current_variant.available and current_variant.metafields.selling_status.tag != blank
-    assign show_pre_order = true
-
-    if cta_text != blank
-      assign addToCartText = cta_text
-    else
-      assign addToCartText = preorder_text | upcase
+    if bis_enabled
+      assign addToCartSelectText = 'products.product.back_in_stock.button' | t
     endif
   endif
+
+
+  comment 
+    --------------------USA MARKET --------------------
+  endcomment
+  if is_us_market == true
+    assign callout_heading = section.settings.callout_heading_usa
+  
+    assign enable_selling_status = current_variant.metafields.custom.selling_status_on_off_us
+  
+    assign callout_text = current_variant.metafields.custom.selling_status_callout_text_usa
+    if callout_text == blank
+      assign callout_text = section.settings.callout_text_usa
+    endif
+
+    if enable_selling_status and current_variant.metafields.custom.selling_status_cta_text_usa != blank
+      assign addToCartText = current_variant.metafields.custom.selling_status_cta_text_usa 
+    endif
+    
+    assign cart_callout_text = current_variant.metafields.custom.selling_status_cart_callout_text_usa
+  endif
+
+  if is_us_market == false
+    assign callout_heading = section.settings.callout_heading
+
+    assign enable_selling_status = matching_variant.metafields.custom.selling_status_on_off
+    
+    assign callout_text = current_variant.metafields.selling_status.callout_text
+    if callout_text == blank
+      assign callout_text = section.settings.callout_text
+    endif
+
+    if enable_selling_status and current_variant.metafields.selling_status.cta_text != blank
+      assign addToCartText = current_variant.metafields.selling_status.cta_text
+    endif
+    
+    assign cart_callout_text = current_variant.metafields.selling_status.callout_text_cart
+  endif
+
+  comment
+   if enable_selling_status
+    assign addToCartText = 'products.product.preorder.button' | t
+    assign addToCartTextAttribute = 'products.product.preorder.button' | t
+  endif 
+  endcomment
 
   assign iso_code = cart.currency.iso_code
   capture currency_code
@@ -267,7 +286,15 @@
     {% comment %} <label for="Details">{{ 'products.product.details' | t }}</label>
     <textarea id="Details" name="properties[Details]"></textarea> {% endcomment %}
 
-    {% render 'product-callout', selling_status: selling_status, callout_text: callout_text %}
+    {% comment %}
+      Only render product-callout if selling_status is not blank.
+      This ensures the Selling_Status_Callout_Text only displays when 
+      selling_status_tag has a value (e.g., "PRE ORDER", "SHIPS SOON").
+      If selling_status_tag is empty, no callout text will display (blank state).
+    {% endcomment %}
+    {% if section.settings.enable_callout %}
+      {% render 'product-callout', product: product, section: section %}
+    {% endif %}
 
     {% if gift_card_recipient_feature_active %}
       {% render 'gift-card-form', product: product, section: section %}
@@ -281,35 +308,46 @@
       type="checkbox"
       name="properties[_selling-status]"
       id="selling-status"
-      {% if show_pre_order %}checked{% endif %}
+      {% if enable_selling_status %}checked{% endif %}
       class="hide"
       data-selling-status-checkbox
-      value="{{ selling_status }}"
+      value="{{ cart_callout_text }}"
     />
 
     <input
       type="checkbox"
       name="properties[Note]"
       id="pre-order"
-      {% if show_pre_order %}checked{% endif %}
+      {% if enable_selling_status %}checked{% endif %}
       class="hide"
       data-pre-order-checkbox
-      value="{{ callout_text_cart }}"
+      value="{{ cart_callout_text }}"
     />
 
     <button
+      id="add-to-cart-button-1"
       class="product__add-to-cart product__form-button btn btn--block btn--add-to-cart{% if hideAddToCart %} hide{% endif %}"
       type="submit"
       name="add"
       data-label="{{ addToCartTextAttribute }}"
-      data-selling-status="{{ selling_status }}"
+      data-selling-status="{{ cart_callout_text }}"
       data-add-to-cart
       {% if disableAddToCart %}disabled{% endif %}>
         {{ addToCartText }}
     </button>
 
+
+    {% comment %}Moose US override {% endcomment %}
+  {% if localization.country.iso_code == 'US' %}
+    {% assign bis_enabled = false %}
+  {% endif %}
+
+  {% comment %} Remove Duplicate BIS enabled conditional wrapper when US is available for bis {% endcomment %}
+  
+
     {% if product.variants.size > 1 and product.selected_variant == blank %}
       <button
+        id="add-to-cart-button-2"
         class="product__form-button btn btn--block btn--add-to-cart{% if variants_available == false %} btn--secondary{% endif %}"
         type="button"
         {% if bis_enabled == false and variants_available == false %}disabled{% endif %}
@@ -318,25 +356,27 @@
       </button>
     {% endif %}
 
+  {% if bis_enabled == true %}  
     {% render 'product-bis-trigger', bis_enabled: bis_enabled %}
+  {% endif %}
 
     <div class="mirra-brauz-wrapper">
       {%- if settings.enable_brauz and product.gift_card? == false -%}
-      <div
-        id="brauz-find-in-store-config-product-page"
-        data-sd="{{ shop.permanent_domain }}"
-        data-cvi="{{ product.first_available_variant.id }}"
-        data-hodv="{{ product.has_only_default_variant }}"
-        style="display: none; width: 0"
-      ></div>
-      <div id="brauz-find-in-store-product-page"></div>
-      <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.update.js" async></script>
-    {%- endif -%}
-    <div id="try-with-mirra-custom-product-container"></div>
+        <div
+          id="brauz-find-in-store-config-product-page"
+          data-sd="{{ shop.permanent_domain }}"
+          data-cvi="{{ product.first_available_variant.id }}"
+          data-hodv="{{ product.has_only_default_variant }}"
+          style="display: none; width: 0"
+        ></div>
+        <div id="brauz-find-in-store-product-page"></div>
+        <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.update.js" async></script>
+      {%- endif -%}
+     <div id="try-with-mirra-custom-product-container"></div>
     </div>
 
     {%- if settings.enable_brauz and product.gift_card? == false -%}
       <div id="brauz-find-in-store-product-page-2"></div>
-    {%- endif -%}
+    {%- endif -%}    
   {% endunless %}
 {% endform %}

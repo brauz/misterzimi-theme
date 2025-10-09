@@ -1,0 +1,74 @@
+{%- comment %}
+  Parameters
+  id: string, single ID only.
+  labels: An array of label strings for the accordion items
+  contents: An array of content strings for the accordion items
+  accordion_class: string, can include multiple separated by space.
+  modifiers: (optional) space separated list of BEM modifiers without block name eg. "title-below no-image"
+  open_first: boolean. Default is true
+  multi: boolean. Default is false
+  unique: (optional) String, a unique identifier to prevent duplicate IDs where component is used multiple times
+{%- endcomment %}
+{% liquid
+  assign classes = 'accordion'
+
+  if accordion_class != blank
+    assign classes = classes | prepend: ' ' | prepend: accordion_class
+  endif
+
+  if modifiers
+    assign split_modifiers = modifiers | split: ' '
+
+    for modifier in split_modifiers
+      assign classes = classes | append: ' accordion--' | append: modifier
+    endfor
+  endif
+
+  assign accordion_index = 1
+  assign list_index = 0
+
+  if unique
+    assign unique = unique | prepend: '-'
+  endif
+%}
+
+<div class="{{ classes }}" id="{{ id }}">
+  {%- for label in labels -%}
+    {% assign trigger_id = 'accordion-trigger-' | append: accordion_index | append: unique %}
+    {% assign panel_id = 'accordion-panel-' | append: accordion_index | append: unique %}
+
+    <div class="accordion__label" role="heading">
+      <button
+        type="button"
+        class="accordion__trigger btn-none"
+        id="{{ trigger_id }}"
+        {% if multi == true %}
+          aria-multi="1"
+        {% endif %}
+        aria-controls="{{ panel_id }}"
+        aria-expanded="{% if open_first == true and list_index == 0 %}true{% else %}false{% endif %}"
+      >
+        {{ labels[list_index] }}
+        <span class="accordion__trigger-indicator"></span>
+      </button>
+    </div>
+    <div
+      class="accordion__panel {% if list_index == 0 and open_first == true %}show-panel accordion__panel--active{% endif %}"
+      id="{{ panel_id }}"
+      role="region"
+      aria-labelledby="{{ trigger_id }}"
+      data-label="{{ labels[list_index] | handleize }}"
+    >
+      <div class="accordion__body">
+        {% if type == 'html' %}
+          {{ contents[list_index].html }}
+        {% else %}
+          {{ contents[list_index] }}
+        {% endif %}
+      </div>
+    </div>
+
+    {% assign accordion_index = accordion_index | plus: 1 %}
+    {% assign list_index = list_index | plus: 1 %}
+  {%- endfor -%}
+</div>
