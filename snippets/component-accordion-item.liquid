@@ -32,6 +32,24 @@
   endif
 %}
 
+<style>
+  .product__brauz-shipping-trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin: auto;
+    padding: 0 0 0 1.25rem;
+    text-decoration: underline;
+  }
+  .product__brauz-shipping-trigger .icon {
+    position: absolute;
+    left: 0;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-right: 0.25rem;
+  }
+</style>
+
 <div class="{{ classes }}" id="{{ id }}">
   {%- for label in labels -%}
     {% assign trigger_id = 'accordion-trigger-' | append: accordion_index | append: unique %}
@@ -64,6 +82,15 @@
           {{ contents[list_index].html }}
         {% else %}
           {{ contents[list_index] }}
+        {% endif %}
+
+        {% if settings.enable_brauz and product.gift_card? == false and localization.country.iso_code == 'US' and labels[list_index] == "Shipping & Returns" %}
+          <button class="product__brauz-shipping-trigger btn-none text--small" type="button" onclick="window.Brauz_openDrawerInPDP()">
+            {%- liquid
+              render 'icon-shipping'
+              echo "Estimate Shipping"
+            -%}
+          </button>
         {% endif %}
       </div>
     </div>

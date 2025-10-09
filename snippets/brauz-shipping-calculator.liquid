@@ -1,0 +1,12 @@
+{%- if settings.enable_brauz and product.gift_card? == false and localization.country.iso_code == 'US' -%}
+    <div
+        id="brauz-find-in-store-config-product-page"
+        data-sd="{{ shop.permanent_domain }}"
+        data-cvi="{{ product.first_available_variant.id }}"
+        data-hodv="{{ product.has_only_default_variant }}"
+        data-pvpm="{{ product.selected_or_first_available_variant.metafields.custom.selling_status_cart_callout_text_usa }}"
+        style="display: none; width: 0"
+      ></div>
+    <div id="brauz-shipping-calculator-product-page"></div>
+    <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.js" async></script>
+{%- endif -%}

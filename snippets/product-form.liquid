@@ -1,3 +1,19 @@
+<style>
+  .product__size-and-shipping-wrapper {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .product__size-and-shipping-wrapper .product__size-guide-trigger {
+    margin: unset;
+    flex: 1;
+  }
+  .product__size-and-shipping-wrapper > div {
+    flex: 1;
+  }
+</style>
+
 {%- liquid
   assign short_description = section.settings.short_description
   assign print_collection_name = nil
@@ -238,16 +254,20 @@
       endif
     %}
 
-    <button class="product__size-guide-trigger btn-none text--small{% if fit_style == 'large' or fit_style == 'small' %} show-warning{% endif %}" type="button" data-modal-size-guide-trigger>
-      {%- liquid
-        if fit_style == 'large' or fit_style == 'small'
-          render 'icon-info'
-        else
-          render 'icon-ruler'
-        endif
-          echo size_guide_label
-      -%}
-    </button>
+    <div class="product__size-and-shipping-wrapper">
+      <button class="product__size-guide-trigger btn-none text--small{% if fit_style == 'large' or fit_style == 'small' %} show-warning{% endif %}" type="button" data-modal-size-guide-trigger>
+        {%- liquid
+          if fit_style == 'large' or fit_style == 'small'
+            render 'icon-info'
+          else
+            render 'icon-ruler'
+          endif
+            echo size_guide_label
+        -%}
+      </button>
+      
+      {% render 'brauz-shipping-calculator' %}
+    </div>
 
     {% comment %}
       In order for this form to submit, it needs to contain an input with name="id".
@@ -359,24 +379,6 @@
   {% if bis_enabled == true %}  
     {% render 'product-bis-trigger', bis_enabled: bis_enabled %}
   {% endif %}
-
-    <div class="mirra-brauz-wrapper">
-      {%- if settings.enable_brauz and product.gift_card? == false -%}
-        <div
-          id="brauz-find-in-store-config-product-page"
-          data-sd="{{ shop.permanent_domain }}"
-          data-cvi="{{ product.first_available_variant.id }}"
-          data-hodv="{{ product.has_only_default_variant }}"
-          style="display: none; width: 0"
-        ></div>
-        <div id="brauz-find-in-store-product-page"></div>
-        <script src="https://d3aq2u4yw77ivo.cloudfront.net/find-in-store/shopify/misterzimi/find-in-store.shopify.misterzimi.prod.update.js" async></script>
-      {%- endif -%}
-     <div id="try-with-mirra-custom-product-container"></div>
-    </div>
-
-    {%- if settings.enable_brauz and product.gift_card? == false -%}
-      <div id="brauz-find-in-store-product-page-2"></div>
-    {%- endif -%}    
+    {% render 'brauz-find-in-store' %}  
   {% endunless %}
 {% endform %}
